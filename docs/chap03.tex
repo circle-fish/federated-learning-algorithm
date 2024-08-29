@@ -1,0 +1,182 @@
+
+\chapter{研究方法}
+本节中我们将先结合q-FedAvg算法、FedMGDA+算法和FedAvg算法对优化目标定义进行陈述，然后讲解实验的具体设置细节，包括数据集、实现使用的算法框架、算法中的参数，最后展示实验结果。
+
+\section{问题陈述}
+为了实现我们上述的均衡公平性，我们首先的思路就是——重新加权目标——对于那些性能较差的设备分配更高的权重，从而让网络中的准确性分布更加均匀。
+但是，正如第二章节给出的实验结果图2.2所示，设置q=1.0时q-FedAvg在测试集上表现不如基线测试FedAvg，说明q值的初始化对于模型的性能至关重要。针对数据集的不同，以及性能好坏取决于训练中的模型，没有办法事先就给出一个合适的q值，而这就需要我们动态重新加权，给出优化目标q-FFL的定义：
+
+\begin{equation}
+    \min_w f_q(w)=\sum_{k=1}^m\frac{p_k}{q+1}F_k^{q+1}(w) 
+\end{equation}
+其中 \( F_k^{q+1} \) 表示 \( F_k \) 的 \( (q+1) \) 次方，$F_k(w)$代表第k个用户的本地损失，$p_k$是第k个用户的样本数量与总样本数量之比。\( q \) 是一个调整均衡公平性的量的参数。设置 \( q = 0 \) 这个公式就相当于传统联邦学习FedAvg的目标函数。 \( q \)越大，具有更高本地损失 \( F_k(w) \) 的设备就会有更大的权重，从而能够使得训练准确性分布更加的均匀。设置足够大的 \( q \) 的 \( f_q(w) \) 可以简化为经典的minimax公平性\cite{mohri2019agnostic}，也就是相当于只关注最差性能的公平联邦学习（AFL），单个最差设备的性能将会起到主导作用。
+
+如前所述，q-FedAvg 相当于是对公平联邦学习（AFL）\cite{mohri2019agnostic}中的工作进行了推广，通过参数 q 灵活地权衡调整公平性与准确性。
+在后面的理论分析，主要从收敛速度、测试集损失值、测试集准确率和验证集损失分布的方差值四个指标对q-FedAvg算法进行一个分析。
+主要还是通过优化目标q-FFL去掌握在准确性、公平性、效率等之间的一个权衡的度量，根据我们的具体需要，给出一个足够公平且准确而高效的解决方案。
+
+对于FedMGDA+而言，如第二章节提到的定义一般，它的目的是通过修改参与者梯度合并权重来保证模型收敛到帕累托最优解，从而避免聚合出来的模型更新损害任何一方的利益，提高模型的公平性与鲁棒性。给出FedMGDA+合并权重的公式：
+\begin{align}
+    \mathbf{w}_{t+1}=\mathbf{w}_t-\mathbf{\eta}\mathbf{d}_t, \mathbf{d}_t=J_\mathbf{f}(\mathbf{w}_t)\boldsymbol{\lambda}_t^*, \mathrm{and} \boldsymbol{\lambda}_t^*=\mathrm{argmin}_{\boldsymbol{\lambda}\in\Delta} \|J_\mathbf{f}(\mathbf{w}_t)\boldsymbol{\lambda}\|^2.
+\end{align}
+\begin{equation}
+    J_\mathbf{f}=[\nabla f_1,\ldots,\nabla f_m]\in\mathbb{R}^{d\times m}
+\end{equation}
+上式${\lambda}_t^*$会倾向于将正负号不同的梯度分量通过线性组合抵消而保留公共梯度方向,这样就可以防止联邦模型的公共梯度朝着少部分表现好的参与者靠近。
+而且还可以通过参数${\lambda}_0$和$\epsilon$去限制${\lambda}_t^*$的优化方向，这样就能根据所需的公平性程度灵活进行调控，给出兼顾公平性和全局性能的解决方案。
+类似q-FedAvg，当q足够大时，可以视为AFL的情况，FedMGDA+在$\epsilon$接近0的时候就等价与联邦平均算法FedAvg。
+
+
+\section{算法流程}
+对于q-FedAvg与FedMGDA+我们都已经阐述了二者的核心思想，下面，我们通过伪代码的形式来展示算法的具体流程。
+给出两个具体算法伪代码(q-FedAvg，FedMGDA+)如下所示。
+
+\begin{algorithm}[t]  
+  \caption{ q-FedAvg }  
+  \label{alg:Framwork}  
+  \begin{algorithmic}[1]
+    \Require  $K,T,q,1/L,w^{0},p_{k},k=1,\cdots,m $
+    \State 
+        $\text{for $t$ = 0,$\cdots$,$T$ - 1 do }
+        
+        \State\quad Server selects a subset $S_t$ of $K$ devices at random (each device k is chosen with prob. $pk$)  
+        \State\quad Server sends $w'$ to all selected devices    
+        \State\quad Each selected device $k$ updates $w^t$ 
+        for E epochs of SGD on $F_k$ with step size $n$ to obtain $\bar{w}_{k}^{t+1}$:
+        
+        \State\quad each selected device k computes:
+        \begin{align}
+            &\dot{\Delta}w_{k}^{t}=L(w^{t}-\bar{w}_{k}^{t+1}) \\
+            &\Delta_k^t=F_k^q(w^t)\Delta w_k^t \\
+            &h_{k}^{t}=qF_{k}^{q-1}(w^{t})\|\Delta w_{k}^{t}\|^{2}+LF_{k}^{q}(w^{t})
+        \end{align}
+        \newline
+        \State\quad Each selected device $k$ sends 
+        $\Delta _k^t$ and $h_k^t$ back to the server
+        \State\quad Server updates $w^{t+1}$ as:
+        \begin{align}
+                w^{t+1}=w^t-\frac{\sum_{k\in S_t}\Delta_k^t}{\sum_{k\in S_t}h_k^t}
+        \end{align}
+        
+        \State \text{return $w^{t+1}$} 
+    \end{algorithmic}
+\end{algorithm}  
+
+\begin{algorithm}[t]  
+  \caption{ FedMGDA+ }  
+  \label{alg:Framwork}  
+  \begin{algorithmic}[1]
+  \State$\text{for $t$ = 0,$\cdots$,$T$ - 1 do }
+        
+        \State\quad choose a subset $I_{t}$ of $\left\lceil pm\right\rceil$  clients/users
+        \State\quad
+        $\text{for each $i$ \in $I_{t}$ do }
+                \State\quad\quad$\mathbf{g}_i\leftarrow\text{CLIENTUPDATE }(i,\mathbf{w}_t)$  
+                \State\quad\quad  
+                $\bar{\mathbf{g}}_i:=\mathbf{g}_i/\|\mathbf{g}_i\|        // normalize$ 
+    
+        \State\quad $\lambda^*\leftarrow\mathrm{argmin}_{\boldsymbol{\lambda}\in\Delta,\|\boldsymbol{\lambda}-\boldsymbol{\lambda}_0\|_\infty\leq\epsilon}\|\sum_i\lambda_i\mathbf{g}_i\|^2$
+        \State\quad $\mathrm{d}_t\leftarrow\sum_i\lambda_i^*\bar{\mathbf{g}}_i$
+  
+
+        \State\quad choose (global) step size $\eta_{t}$ 
+        \State\quad $\mathbf{w}_{t+1}\leftarrow\mathbf{w}_t-\mathbf{\eta}_t\mathbf{d}_t$
+        \State \text{return $w_{t+1}$}
+    \end{algorithmic}
+\end{algorithm}  
+\begin{algorithm}[t]    
+  \label{alg:Framwork}  
+  \begin{algorithmic}[1]
+        \Function{CLIENTUPDATE}{$i,\mathbf{w}_t)$}
+                \State $\mathbf{w}^0\leftarrow\mathbf{w}$
+                \State $\text{repeat $k$ epochs}//split local data into r  batches$
+                
+                \State\quad $\mathcal{D}_i\to\mathcal{D}_{i,1}\cup\cdots\cup\mathcal{D}_{i,r}$
+            \State\quad$\text{for j = 1,$\cdots$,r do }$
+                    \State\quad\quad $\mathbf{w}\leftarrow\mathbf{w}-\eta\nabla f_{i}(\mathbf{w};\mathcal{D}_{i,j})$
+            \State \text{return $\bar{\mathbf{g}}:=\mathbf{w}_0-\mathbf{w}$}
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}  
+
+
+\section{实验设置}
+
+本节我们要介绍实现q-FedAvg和FedMGDA+两个算法有关的实验设置，主要是数据集和超参数的设置方案,然后再给出两个算法根据不同参数值分别对应三组目标的实验结果，并给出初步的解释。
+
+
+\subsection{数据集}
+
+我们在研究的时候,做了一系列的试验。这些数据集主要是从我们参考文献中提到或者开源联邦学习框架里面常常使用的公开数据集，如专门给联邦学习用的基准数据集leaf。具体来说，我们用到了下面两个数据集：
+
+（1）synthetic。一个用线性回归分类器的合成数据集。可以处理二分类任务，可以便宜的大量生成，同时避免出现安全性和隐私问题，在q-FedAvg的实验中使用；
+
+（2）CIFAR10。主要用于图像分类的数据集。是有8千万张微型图片数据集的有标签子集，在FedMGDA+的实验中使用。
+
+\subsection{超参数}
+
+本地设备上的数据集都是随机按比例分成三份:
+80 \% 的训练集，10\% 的测试集和 10\% 的验证集。
+
+
+对q-FedAvg算法而言，使用synthetic（1，1）数据集，实验结果如图3.1所示。在测试集和验证集上，进行了FedAvg与代入三组不同q值[ 0.1, 0.5, 5.0 ]的q-FedAvg的对比实验。
+
+如图3.1所示，实验结果用测试集上准确率test\_accuracy分布曲线图和test\_loss损失分布曲线图，还有验证集准确率分布的标准差std\_valid\_loss分布曲线图表示。
+
+
+对FedMGDA+算法而言，使用CIFAR10数据集，主要受到全局步长$\eta$和$\epsilon$的影响，在测试集和验证集上，进行了FedAvg与代入三组不同的$\eta$和$\epsilon$值的FedMGDA+的的对比实验。
+
+如图3.2所示，三组的$\eta$和$\epsilon$值分别为[1.0,0.1],[0.5,0.1],[0.1,0.1]，实验结果用测试集上准确率test\_accuracy分布曲线图和test\_loss损失分布曲线图，还有验证集损失值分布的标准差std\_valid\_loss分布曲线图表示。
+
+\section{实验结果}
+\begin{figure}[htb]
+    \begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/qffl-test-loss.png}}
+	\end{minipage}
+	\begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/qffl-test-accu.png}}
+	\end{minipage}
+        \begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/qffl-test-std.png}}
+	\end{minipage}
+ \caption{q-FedAvg实验结果}
+\end{figure}
+
+\begin{figure}[htb]
+    \begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/fedmgda-test-accu.png}}
+	\end{minipage}
+	\begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/fedmgda-valid-accu.png}}
+	\end{minipage}
+        \begin{minipage}{0.33\linewidth}
+		\vspace{3pt}
+		\centerline{\includegraphics[width=\textwidth]{image//chap03/fedmgda-std.png}}
+	\end{minipage}
+ \caption{FedMGDA+实验结果}
+\end{figure}
+
+
+首先，根据实验结果，我们可以发现：
+对于给出联邦数据集synthetic（1，1），q-FedAvg能否在准确率和损失值上表现得比基准测试更加优秀，取决于我们设置的q的大小。在图3.4中，三个目标组（q = 0.1,q = 0.5,q = 5.0）的测试集准确率分布曲线表示，虽然q = 0.1和q = 0.5目标组平均测试精度相差不大，但q = 0.1目标明显收敛的速度和准确率都是最高的，而且高于基准测试，但是q = 0.5目标就是准确率相对较低，乃至低于基线测试，但收敛速度较快，体现了q = 0.1目标的效率是实验组中最好的。
+
+测试精度排序依次为: q-FedAvg\_q0.1 > FedAvg > q-FedAvg\_q0.5 >q-FedAvg\_q5.0。
+至于公平性的排序应当是q越大，则公平性越高，从验证集上损失值的标准差分布值大小也可以看出，公平性排序依次为: q-FedAvg\_q5.0 > q-FedAvg\_q0.5 > q-FedAvg\_q0.5 > FedAvg，这正好佐证了q值可以用于灵活地公平性调度的推理。
+
+对于给出联邦数据集CIFAR10，FedMGDA+能否在准确率和损失值上表现得比基准测试更加优秀，类似地，同样取决于我们设置的超参数——全局步长$\eta$的大小，因为这是该算法的主要影响参数，对于$\epsilon$我们三组都设为0.1。
+
+如图3.5中所示，三个目标组（$\eta$ = 0.1,$\eta$ = 0.5,$\eta$ = 1.0 ）的测试集准确率分布曲线表示，$\eta$ = 1.0目标和$\eta$ = 0.5目标在测试集准确率和验证集准确率上都表现不错，都会比基准测试要好，但$\eta$ = 0.1的目标的测试集准确率和验证集准确率分布都是最低的，而且低于基准测试。
+
+不过公平性与之相应的，明显$\eta$ = 0.1目标验证集上损失值分布的标准差是最低的，其次是$\eta$ = 0.5目标组，最后是$\eta$ = 1.0目标组，这可以说明在保持$\epsilon$不变的情况下，可以认为$\eta$越大，公平性越低。
+但是要注意的是虽然$\eta$ = 1.0明显公平性最低，但是它在通信轮数中标准差的幅度非常大，所以我们不能确定能否像q-FedAvg那样通过对超参数q的调整实现对公平性的调度，这方面需要更进一步的实验分析。
+
+还有因为FedMGDA+调整了更新量的幅度（归一化$\eta^*$)，我们也不能确定改变全局步长$\eta$对测试精度的提升的具体原因，是否是如同我们的设计初衷——维护了公共梯度的一致性而造成的，还是单纯是因为更新量幅度的显著变化造成的，这方面也有待研究。
+
+
+
+% 首先将个人信息写到\texttt{./docs/info.tex}中。

@@ -1,0 +1,27 @@
+%
+% 摘要信息
+% 本文档中前缀"c-"代表中文版字段, 前缀"e-"代表英文版字段
+% 摘要内容应概括地反映出本论文的主要内容，主要说明本论文的研究目的、内容、方法、成果和结论。要突出本论文的创造性成果或新见解，不要与引言相 混淆。语言力求精练、准确，以 300—500 字为宜。
+% 在摘要的下方另起一行，注明本文的关键词（3—5 个）。关键词是供检索用的主题词条，应采用能覆盖论文主要内容的通用技术词条(参照相应的技术术语 标准)。按词条的外延层次排列（外延大的排在前面）。摘要与关键词应在同一页。
+% modifier: 黄俊杰(huangjj27, 349373001dc@gmail.com)
+% update date: 2017-04-15
+%
+%
+
+\cabstract{
+    
+   目前各种机器学习、深度学习等高新技术正在兴起，然而它们所需的跨领域数据往往在各公司或组织之间保密非共享，这导致了“数据孤岛” 问题。为了在保障隐私和数据安全的同时进行数据使用和建模，联邦学习(Federated learning)应运而生。它将传统机器学习中的数据聚合转换成模型聚合，并将聚合对象主体变成模型——联邦学习框架中，在训练过程中既要进行模型传输也要进行梯度传输，就像城邦之间的合作一样，实现了对模型的"联邦化"。然而，随着任务复杂性和对模型性能要求逐渐提升，在庞大、异构设备网络上进行统计模型训练时会给接收大量数据的服务器带来巨大通信压力，并且可能导致部分设备资源不公平分配。例如普通FedAvg算法仅在通信阶段单纯最小化聚合损失函数上传， 这种做法是不公平的，会造成不同设备之间会出现显著的性能差异， 限制通信效率。本文针对上述公平性和效率问题， 我们介绍q-FedAvg算法和FedMGDA+算法，二者能使联邦网络中设备分布更加均匀、准确，提升联邦学习的公平性和效率。我们讲解了二者的基本理论，并且还在部分联邦学习的专用数据集进行实验并对其进行分析，最后通过整理二者共同点和差异，总结它们对提升联邦学习公平性和效率的作用，为提升联邦学习公平性提供一种新的视角。
+
+}
+% 中文关键词(每个关键词之间用“，”分开,最后一个关键词不打标点符号。)
+\ckeywords{联邦学习，通信效率，公平资源分配}
+
+\eabstract{
+    
+    Currently, various cutting-edge technologies such as machine learning and deep learning are on the rise. However, the cross-domain data required for these technologies is often kept confidential and not shared among companies or organizations, leading to the "data island" problem. To use and model data while ensuring privacy and data security, federated learning has emerged. It transforms the data aggregation in traditional machine learning into model aggregation, changing the subject of aggregation to the model—just like cooperation between city-states, it achieves the "federalization" of the model. In the federated learning framework, both model transmission and gradient transmission are carried out during training, which is like cooperation between city-states.
+
+    However, as task complexity and demands for model performance gradually increase, training statistical models on large, heterogeneous device networks can bring significant communication pressure to servers receiving vast amounts of data and may lead to unfair resource allocation among devices. For example, the standard FedAvg algorithm simply minimizes the aggregate loss function during the communication phase, which can create significant differences in advantages and disadvantages among different devices, limiting communication efficiency. This paper addresses the above issues of fairness and efficiency. We introduce the q-FedAvg algorithm and FedMGDA+ algorithm, which can make the distribution of devices in the federal network more uniform and accurate, enhancing the fairness and efficiency of federated learning. We explain their basic theories and conduct experiments on specific datasets for federated learning and analyze them. Finally, by summarizing their commonalities and differences, we conclude their roles in enhancing the fairness and efficiency of federated learning, providing a new perspective for improving the fairness of federated learning.
+}
+% 英文文关键词(每个关键词之间用,分开, 最后一个关键词不打标点符号。)
+\ekeywords{Federated learning,Communication efficiency, fair resource allocation}
+
